@@ -54,16 +54,16 @@ jupyter lab notebooks/
 
 ## Notebook Guide
 
-| Notebook | Day | Task |
-|----------|-----|------|
-| 01_setup_and_test | Day 1 | Environment check, TargetDiff clone & checkpoint |
-| 02_prepare_targets | Day 2 | Download PDB, extract pockets, baseline conformers |
-| 03_vina_baseline | Day 3 | Receptor prep, baseline drug Vina scoring |
-| 04_generate_wildtype | Day 4 | TargetDiff generation on 1M17 |
-| 05_evaluate_wildtype | Day 5–6 | Validity/QED/SA/Vina evaluation for WT |
-| 06_generate_mutant | Day 8 | TargetDiff generation on 4I22 (T790M) |
-| 07_evaluate_mutant | Day 9 | Evaluation + UMAP chemical space |
-| 08_final_analysis | Day 10–11 | Top-10 refinement, all publication figures |
+| Notebook | Description |
+|----------|-------------|
+| 01_setup_and_test | Environment verification, TargetDiff clone & checkpoint download |
+| 02_prepare_targets | PDB download, pocket extraction, baseline drug conformer generation |
+| 03_vina_baseline | Receptor preparation, baseline drug Vina scoring |
+| 04_generate_wildtype | TargetDiff conditional generation on EGFR WT (1M17) |
+| 05_evaluate_wildtype | Validity / QED / SA Score / Vina evaluation for WT molecules |
+| 06_generate_mutant | TargetDiff conditional generation on EGFR T790M (4I22) |
+| 07_evaluate_mutant | T790M evaluation + cross-target UMAP chemical space analysis |
+| 08_final_analysis | Top-10 refinement, radar chart, all publication-quality figures |
 
 ## Evaluation Metrics
 
