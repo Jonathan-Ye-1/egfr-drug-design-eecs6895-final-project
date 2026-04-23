@@ -15,7 +15,7 @@ targets:
     pdb_id: "4I22"
     pdb_file: "data/pdb/4I22.pdb"
     pocket_file: "data/pockets/4I22_pocket.pdb"
-    ligand_resname: "WZ4"       # WZ4002 in 4I22
+    ligand_resname: "IRE"       # co-crystal ligand in 4I22
     pocket_radius: 10.0
     receptor_pdbqt: "data/pdb/4I22_receptor.pdbqt"
     box_center: null
