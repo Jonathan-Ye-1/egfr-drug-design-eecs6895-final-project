@@ -1,6 +1,6 @@
 # Presentation Slides Outline (12–15 pages)
 
-## Slide 1–2: Problem Definition
+## Slides 1–2: Problem Definition
 - Lung cancer statistics; EGFR mutation prevalence in Asian populations
 - Drug resistance: T790M/C797S — unmet clinical need
 - Hypothesis: generative AI can explore chemical space beyond existing libraries
