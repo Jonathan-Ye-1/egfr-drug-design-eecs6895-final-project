@@ -73,22 +73,38 @@ def prepare_receptor_pdbqt(
     """
     Convert receptor PDB to PDBQT for Vina.
 
-    Requires MGLTools `prepare_receptor4.py` OR Open Babel.
-    Falls back to a subprocess call with obabel if mgltools_prepare is None.
+    Strips water, co-crystal ligands, and buffer ions (everything except
+    standard amino-acid residues) before conversion. This prevents docking
+    artifacts caused by e.g. waters occupying the binding pocket.
     """
     import subprocess
 
+    # Step 1: strip non-protein residues to a cleaned intermediate PDB
+    parser = PDB.PDBParser(QUIET=True)
+    structure = parser.get_structure("protein", pdb_file)
+
+    class KeepProtein(PDB.Select):
+        def accept_residue(self, residue):
+            # BioPython marks non-standard residues with a non-blank hetero flag
+            return residue.id[0] == " "
+
+    clean_pdb = str(pdb_file).replace(".pdb", "_clean.pdb")
+    io = PDB.PDBIO()
+    io.set_structure(structure)
+    io.save(clean_pdb, KeepProtein())
+
+    # Step 2: convert cleaned PDB → PDBQT with Gasteiger charges
     if mgltools_prepare:
         cmd = [
             "python", mgltools_prepare,
-            "-r", pdb_file,
+            "-r", clean_pdb,
             "-o", output_pdbqt,
             "-A", "hydrogens",
             "-U", "nphs_lps",
         ]
     else:
-        # Open Babel fallback
-        cmd = ["obabel", pdb_file, "-O", output_pdbqt, "-xr", "--partialcharge", "gasteiger"]
+        cmd = ["obabel", clean_pdb, "-O", output_pdbqt, "-xr",
+               "--partialcharge", "gasteiger"]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
