@@ -95,6 +95,7 @@ class VinaDocker:
         exhaustiveness: int = 8,
         num_modes: int = 9,
         vina_bin: str = "vina",
+        cpu: int | None = None,   # Vina --cpu; None = auto-detect all cores
     ):
         self.receptor = receptor_pdbqt
         self.center = center
@@ -102,6 +103,9 @@ class VinaDocker:
         self.exhaustiveness = exhaustiveness
         self.num_modes = num_modes
         self.vina_bin = vina_bin
+        if cpu is None:
+            cpu = os.cpu_count() or 1
+        self.cpu = cpu
 
     def _mol_to_pdbqt(self, mol: Chem.Mol, tmp_dir: str) -> Optional[str]:
         """Convert RDKit Mol to PDBQT via Open Babel."""
@@ -145,6 +149,7 @@ class VinaDocker:
                 "--size_z", str(self.box_size[2]),
                 "--exhaustiveness", str(self.exhaustiveness),
                 "--num_modes", str(self.num_modes),
+                "--cpu", str(self.cpu),
                 "--out", out_path,
             ]
             result = subprocess.run(cmd, capture_output=True, text=True)

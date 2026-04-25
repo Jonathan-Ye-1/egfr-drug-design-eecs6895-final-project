@@ -23,7 +23,10 @@ targets:
 
 baselines:
   erlotinib:
-    smiles: "C(#N)c1cc2c(cc1OCC)NC(=O)c1cc(OCC)c(OCC)c(OC)c1N2"
+    # PubChem CID 176870. Previously stored SMILES (with C#N nitrile + NC(=O)
+    # amide bridge) was a WRONG molecule -- not Erlotinib. The correct
+    # 4-anilinoquinazoline scaffold + 3-ethynylphenyl group:
+    smiles: "C#Cc1cccc(Nc2ncnc3cc(OCCOC)c(OCCOC)cc23)c1"
     name: "Erlotinib"
     sdf_file: "data/baselines/erlotinib.sdf"
   gefitinib:
