@@ -11,6 +11,81 @@ from rdkit.Chem import AllChem
 from tqdm import tqdm
 
 
+# ---------- Resumable cross-docking helper ----------
+
+def cross_dock_smiles_list(
+    smiles_list: list[str],
+    docker_wt,
+    docker_mut: "VinaDocker",
+    output_csv: str,
+    source_label: str = "",
+    checkpoint_every: int = 25,
+) -> pd.DataFrame:
+    """Dock each SMILES against BOTH receptors (WT + Mutant) and save score pairs.
+
+    Resumable: if `output_csv` exists, mol_ids already present are skipped, so
+    you can stop and re-run after a disconnect without redoing work.
+
+    Output CSV columns:
+      mol_id, source, smiles, vina_WT, vina_Mut, status_WT, status_Mut
+    """
+    # Load existing progress if any
+    done_ids: set[int] = set()
+    existing = None
+    if os.path.exists(output_csv):
+        existing = pd.read_csv(output_csv)
+        done_ids = set(existing["mol_id"].tolist())
+        print(f"[resume] {len(done_ids)} molecules already in {output_csv}, skipping them")
+
+    new_records = []
+    pending = [(i, s) for i, s in enumerate(smiles_list) if i not in done_ids]
+    if not pending:
+        print(f"[resume] all {len(smiles_list)} molecules already docked.")
+        return pd.read_csv(output_csv) if existing is not None else pd.DataFrame()
+
+    Path(output_csv).parent.mkdir(parents=True, exist_ok=True)
+    pbar = tqdm(pending, desc=f"{source_label} cross-docking")
+    for i, smi in pbar:
+        mol = Chem.MolFromSmiles(smi)
+        rec = {"mol_id": i, "source": source_label, "smiles": smi,
+               "vina_WT": None, "vina_Mut": None,
+               "status_WT": "parse_error", "status_Mut": "parse_error"}
+        if mol is not None:
+            score_wt = docker_wt.dock_mol(mol)
+            rec["vina_WT"] = score_wt
+            rec["status_WT"] = "ok" if score_wt is not None else "dock_failed"
+
+            score_mut = docker_mut.dock_mol(mol)
+            rec["vina_Mut"] = score_mut
+            rec["status_Mut"] = "ok" if score_mut is not None else "dock_failed"
+
+        new_records.append(rec)
+        pbar.set_postfix({"vina_WT": rec["vina_WT"], "vina_Mut": rec["vina_Mut"]})
+
+        # Checkpoint append
+        if len(new_records) % checkpoint_every == 0:
+            _flush_records(output_csv, existing, new_records)
+
+    # Final flush
+    _flush_records(output_csv, existing, new_records)
+    out = pd.read_csv(output_csv)
+    n_ok = ((out["status_WT"] == "ok") & (out["status_Mut"] == "ok")).sum()
+    print(f"\n[done] {n_ok}/{len(out)} molecules have both WT + Mut scores -> {output_csv}")
+    return out
+
+
+def _flush_records(output_csv: str, existing: Optional[pd.DataFrame],
+                   new_records: list[dict]) -> None:
+    """Append the in-memory new_records to the output CSV (overwrite-merge)."""
+    new_df = pd.DataFrame(new_records)
+    if existing is not None and len(existing):
+        merged = pd.concat([existing, new_df], ignore_index=True)
+    else:
+        merged = new_df
+    merged = merged.drop_duplicates(subset=["mol_id", "source"], keep="last")
+    merged.to_csv(output_csv, index=False)
+
+
 class VinaDocker:
     def __init__(
         self,
