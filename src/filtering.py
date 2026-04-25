@@ -96,7 +96,7 @@ def compute_all_metrics(
 
 def apply_filters(
     df: pd.DataFrame,
-    qed_min: float = 0.4,
+    qed_min: float = 0.3,
     sa_max: float = 5.0,
     lipinski_max_violations: int = 1,
     pains_max: int = 0,
@@ -105,13 +105,18 @@ def apply_filters(
 ) -> tuple[pd.DataFrame, dict]:
     """Apply hard drug-likeness filters; return (kept_df, per-stage counts).
 
-    Default thresholds are conventional drug-discovery values:
-      - QED >= 0.4   (drug-like)
-      - SA <= 5      (synthesizable)
+    Default thresholds chosen so all three approved EGFR drugs (Erlotinib,
+    Gefitinib, Osimertinib) PASS the filter. Note: Osimertinib has QED=0.31
+    because QED penalizes its acrylamide covalent warhead -- this is a known
+    QED limitation for covalent inhibitors, so we set the floor at 0.3 not
+    the more common 0.4.
+
+      - QED >= 0.3   (drug-like; 0.3 includes covalent drugs like Osimertinib)
+      - SA <= 5      (synthesizable; Ertl & Schuffenhauer)
       - <=1 Lipinski violation (orally bioavailable)
-      - 0 PAINS alerts
-      - 200 <= MW <= 600
-      - -2 <= LogP <= 6
+      - 0 PAINS alerts (avoid pan-assay interference)
+      - 200 <= MW <= 600 (drug-like molecular weight)
+      - -2 <= LogP <= 6 (acceptable lipophilicity)
     """
     summary = {"input": len(df)}
     mask = pd.Series(True, index=df.index)
