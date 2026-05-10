@@ -1,8 +1,4 @@
-"""Filter generated molecules: drug-likeness + PAINS + Tanimoto-to-baselines.
-
-Builds on `src.evaluation` (which provides QED, SA, MW, LogP, Lipinski).
-Used by notebook 05 to turn ~1000 raw molecules into a drug-like shortlist.
-"""
+"""Drug-likeness filters: PAINS, Lipinski violations, Tanimoto similarity to reference set."""
 
 from __future__ import annotations
 from typing import Iterable
@@ -14,17 +10,16 @@ from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
 from src.evaluation import compute_sa_score, lipinski_details
 
 
-# ---------- PAINS detection ----------
 
 def get_pains_catalog() -> FilterCatalog:
-    """Return RDKit's PAINS filter catalog (PAINS_A + PAINS_B + PAINS_C)."""
+    """Return RDKit PAINS filter catalog (A + B + C subsets)."""
     params = FilterCatalogParams()
     params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
     return FilterCatalog(params)
 
 
 def count_pains_alerts(mol: Chem.Mol, catalog: FilterCatalog | None = None) -> int:
-    """Number of PAINS substructures matched. 0 = clean."""
+    """Number of PAINS substructure matches; 0 means clean."""
     if mol is None:
         return -1
     if catalog is None:
@@ -32,7 +27,6 @@ def count_pains_alerts(mol: Chem.Mol, catalog: FilterCatalog | None = None) -> i
     return len(catalog.GetMatches(mol))
 
 
-# ---------- Lipinski violation count (more informative than pass/fail) ----------
 
 def lipinski_violations(mol: Chem.Mol) -> int:
     """Count violations of the four Ro5 rules (0 = perfect, 4 = all violated)."""
@@ -43,7 +37,6 @@ def lipinski_violations(mol: Chem.Mol) -> int:
     return int(mw > 500) + int(hbd > 5) + int(hba > 10) + int(logp > 5)
 
 
-# ---------- Tanimoto similarity to a reference set (e.g., approved drugs) ----------
 
 def morgan_fp(mol: Chem.Mol, radius: int = 2, n_bits: int = 2048):
     return AllChem.GetMorganFingerprintAsBitVect(mol, radius, n_bits)
@@ -61,17 +54,16 @@ def tanimoto_max(mol: Chem.Mol, ref_fps: list, ref_names: list[str] | None = Non
     return float(sims[idx]), name
 
 
-# ---------- One-stop metrics computation ----------
 
 def compute_all_metrics(
     mols: Iterable[Chem.Mol],
     baseline_fps: list | None = None,
     baseline_names: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Compute MW/LogP/HBA/HBD/TPSA/RotBonds/QED/SA/Lipinski/PAINS for each molecule.
+    """Compute physicochemical properties and filter flags for a list of molecules.
 
-    Optionally adds MaxTanimotoToBaseline + ClosestBaseline columns.
-    Skips Nones (returns DataFrame with only successfully parsed mols).
+    If baseline_fps is provided, also adds MaxTanimotoToBaseline and ClosestBaseline.
+    Skips None entries; returns only successfully parsed molecules.
     """
     catalog = get_pains_catalog()
     records = []
@@ -92,7 +84,6 @@ def compute_all_metrics(
     return pd.DataFrame(records)
 
 
-# ---------- Apply hard filter rules ----------
 
 def apply_filters(
     df: pd.DataFrame,
@@ -103,20 +94,10 @@ def apply_filters(
     mw_range: tuple[float, float] = (200, 600),
     logp_range: tuple[float, float] = (-2, 6),
 ) -> tuple[pd.DataFrame, dict]:
-    """Apply hard drug-likeness filters; return (kept_df, per-stage counts).
+    """Apply drug-likeness hard filters; return (kept_df, per-stage counts dict).
 
-    Default thresholds chosen so all three approved EGFR drugs (Erlotinib,
-    Gefitinib, Osimertinib) PASS the filter. Note: Osimertinib has QED=0.31
-    because QED penalizes its acrylamide covalent warhead -- this is a known
-    QED limitation for covalent inhibitors, so we set the floor at 0.3 not
-    the more common 0.4.
-
-      - QED >= 0.3   (drug-like; 0.3 includes covalent drugs like Osimertinib)
-      - SA <= 5      (synthesizable; Ertl & Schuffenhauer)
-      - <=1 Lipinski violation (orally bioavailable)
-      - 0 PAINS alerts (avoid pan-assay interference)
-      - 200 <= MW <= 600 (drug-like molecular weight)
-      - -2 <= LogP <= 6 (acceptable lipophilicity)
+    QED floor is 0.3 (not the typical 0.4) so that covalent drugs like Osimertinib
+    (QED=0.31 due to its acrylamide warhead) are not discarded.
     """
     summary = {"input": len(df)}
     mask = pd.Series(True, index=df.index)
@@ -137,7 +118,6 @@ def apply_filters(
     return df[mask].copy().reset_index(drop=True), summary
 
 
-# ---------- Convenience: load SDF -> mol list ----------
 
 def load_sdf_mols(sdf_path: str) -> list[Chem.Mol]:
     """Read an SDF, return only successfully sanitized molecules."""

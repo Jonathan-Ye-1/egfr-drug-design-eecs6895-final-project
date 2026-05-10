@@ -1,4 +1,4 @@
-"""Plotting utilities for score distributions, chemical space, and radar charts."""
+"""Plotting: Vina score distributions, UMAP chemical space, and radar charts."""
 
 from __future__ import annotations
 import numpy as np
@@ -27,7 +27,7 @@ def plot_score_distribution(
     baseline_scores: dict[str, float],
     output_path: str = "results/figures/fig2_vina_distribution.png",
 ):
-    """Figure 2: Vina score distribution for WT vs T790M + baseline drug lines."""
+    """Vina score distributions for WT vs T790M with baseline drug reference lines."""
     fig, ax = plt.subplots(figsize=(9, 5))
 
     wt_scores = wt_df["vina_score"].dropna()
@@ -56,7 +56,7 @@ def plot_chemical_space(
     baseline_smiles: dict[str, str],
     output_path: str = "results/figures/fig5_umap.png",
 ):
-    """Figure 5: UMAP of Morgan fingerprints for WT, T790M, and baselines."""
+    """UMAP of Morgan fingerprints for WT, T790M, and baseline drugs."""
     try:
         import umap
     except ImportError:
@@ -90,7 +90,6 @@ def plot_chemical_space(
         ax.scatter(embedding[mask, 0], embedding[mask, 1],
                    c=color, s=size, marker=marker, alpha=0.6, label=label)
 
-    # Annotate baseline drugs
     base_start = len(wt_fp) + len(mut_fp)
     for i, name in enumerate(baseline_smiles.keys()):
         ax.annotate(name, embedding[base_start + i], fontsize=8, fontweight="bold")
@@ -108,7 +107,7 @@ def plot_radar(
     baseline_df: pd.DataFrame,
     output_path: str = "results/figures/fig3_radar.png",
 ):
-    """Figure 3: Radar chart comparing generated Top-10 vs baseline drugs."""
+    """Radar chart comparing top-10 generated molecules against baseline drugs."""
     metrics = ["vina_score", "qed", "sa_score", "MW", "LogP"]
     labels = ["Vina\n(neg better)", "QED", "SA Score\n(low better)", "MW", "LogP"]
 

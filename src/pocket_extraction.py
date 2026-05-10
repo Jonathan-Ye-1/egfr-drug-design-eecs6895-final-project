@@ -20,10 +20,7 @@ def get_ligand_center(pdb_file: str, ligand_resname: str) -> np.ndarray:
                         coords.append(atom.get_vector().get_array())
 
     if not coords:
-        raise ValueError(
-            f"Ligand '{ligand_resname}' not found in {pdb_file}. "
-            "Check the residue name with: grep HETATM file.pdb | awk '{print $4}' | sort -u"
-        )
+        raise ValueError(f"Ligand '{ligand_resname}' not found in {pdb_file}.")
     return np.mean(coords, axis=0)
 
 
@@ -46,12 +43,9 @@ def extract_pocket(
 
     class PocketSelect(PDB.Select):
         def accept_residue(self, residue):
-            # Always keep protein residues within radius
             for atom in residue:
-                dist = np.linalg.norm(atom.get_vector().get_array() - center)
-                if dist <= radius:
+                if np.linalg.norm(atom.get_vector().get_array() - center) <= radius:
                     return 1
-            # Optionally keep the reference ligand
             if include_ligand and residue.get_resname().strip() == ligand_resname:
                 return 1
             return 0
@@ -70,30 +64,25 @@ def prepare_receptor_pdbqt(
     output_pdbqt: str,
     mgltools_prepare: Optional[str] = None,
 ) -> str:
-    """
-    Convert receptor PDB to PDBQT for Vina.
+    """Convert receptor PDB to PDBQT for AutoDock Vina.
 
-    Strips water, co-crystal ligands, and buffer ions (everything except
-    standard amino-acid residues) before conversion. This prevents docking
-    artifacts caused by e.g. waters occupying the binding pocket.
+    Strips heteroatoms (waters, co-crystal ligands, ions) before conversion
+    to avoid spurious Vina contacts in the binding pocket.
     """
     import subprocess
 
-    # Step 1: strip non-protein residues to a cleaned intermediate PDB
     parser = PDB.PDBParser(QUIET=True)
     structure = parser.get_structure("protein", pdb_file)
 
     class KeepProtein(PDB.Select):
         def accept_residue(self, residue):
-            # BioPython marks non-standard residues with a non-blank hetero flag
-            return residue.id[0] == " "
+            return residue.id[0] == " "  # blank hetflag = standard amino acid
 
     clean_pdb = str(pdb_file).replace(".pdb", "_clean.pdb")
     io = PDB.PDBIO()
     io.set_structure(structure)
     io.save(clean_pdb, KeepProtein())
 
-    # Step 2: convert cleaned PDB → PDBQT with Gasteiger charges
     if mgltools_prepare:
         cmd = [
             "python", mgltools_prepare,

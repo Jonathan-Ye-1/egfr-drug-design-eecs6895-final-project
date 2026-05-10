@@ -1,4 +1,4 @@
-"""Compute drug-likeness metrics: Validity, Uniqueness, Diversity, QED, SA, Lipinski."""
+"""Drug-likeness metrics: Validity, Uniqueness, Diversity, QED, SA Score, Lipinski."""
 
 from __future__ import annotations
 import numpy as np
@@ -75,7 +75,6 @@ class MolEvaluator:
         valid_smiles = df.loc[df["valid"], "smiles"].tolist()
         if not valid_smiles:
             return 0.0
-        # Canonical SMILES for deduplication
         canonical = set()
         for smi in valid_smiles:
             mol = Chem.MolFromSmiles(smi)
@@ -90,7 +89,6 @@ class MolEvaluator:
         if len(valid_smiles) < 2:
             return 0.0
 
-        # Sample to keep computation tractable
         rng = np.random.default_rng(42)
         if len(valid_smiles) > sample_n:
             valid_smiles = rng.choice(valid_smiles, sample_n, replace=False).tolist()
