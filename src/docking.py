@@ -1,4 +1,4 @@
-"""AutoDock Vina docking wrapper for batch scoring of generated molecules."""
+"""AutoDock Vina docking wrapper: single-molecule and batch scoring."""
 
 import subprocess
 import tempfile
@@ -11,7 +11,6 @@ from rdkit.Chem import AllChem
 from tqdm import tqdm
 
 
-# ---------- Resumable cross-docking helper ----------
 
 def cross_dock_smiles_list(
     smiles_list: list[str],
@@ -21,13 +20,11 @@ def cross_dock_smiles_list(
     source_label: str = "",
     checkpoint_every: int = 25,
 ) -> pd.DataFrame:
-    """Dock each SMILES against BOTH receptors (WT + Mutant) and save score pairs.
+    """Dock each SMILES against both receptors (WT + Mutant) and save score pairs.
 
-    Resumable: if `output_csv` exists, mol_ids already present are skipped, so
-    you can stop and re-run after a disconnect without redoing work.
+    Resumable: if `output_csv` exists, mol_ids already present are skipped.
 
-    Output CSV columns:
-      mol_id, source, smiles, vina_WT, vina_Mut, status_WT, status_Mut
+    Output columns: mol_id, source, smiles, vina_WT, vina_Mut, status_WT, status_Mut
     """
     # Load existing progress if any
     done_ids: set[int] = set()
@@ -103,9 +100,7 @@ class VinaDocker:
         self.exhaustiveness = exhaustiveness
         self.num_modes = num_modes
         self.vina_bin = vina_bin
-        if cpu is None:
-            cpu = os.cpu_count() or 1
-        self.cpu = cpu
+        self.cpu = cpu if cpu is not None else (os.cpu_count() or 1)
 
     def _mol_to_pdbqt(self, mol: Chem.Mol, tmp_dir: str) -> Optional[str]:
         """Convert RDKit Mol to PDBQT via Open Babel."""
@@ -156,7 +151,6 @@ class VinaDocker:
             if result.returncode != 0:
                 return None
 
-            # Parse best score from Vina output
             for line in result.stdout.splitlines():
                 if line.strip().startswith("1 "):
                     try:
@@ -171,10 +165,7 @@ def dock_molecules(
     docker: VinaDocker,
     output_csv: str,
 ) -> pd.DataFrame:
-    """
-    Dock all molecules in an SDF file and return a DataFrame with Vina scores.
-    Saves intermediate results every 50 molecules for crash recovery.
-    """
+    """Dock all molecules in an SDF file; checkpoint every 50 molecules."""
     supplier = Chem.SDMolSupplier(sdf_file, removeHs=False)
     records = []
 
@@ -194,7 +185,7 @@ def dock_molecules(
 
         # Checkpoint every 50 molecules
         if (i + 1) % 50 == 0:
-            pd.DataFrame(records).to_csv(output_csv + ".tmp", index=False)
+            pd.DataFrame(records).to_csv(output_csv + ".tmp", index=False)  # crash-recovery checkpoint
 
     df = pd.DataFrame(records)
     Path(output_csv).parent.mkdir(parents=True, exist_ok=True)

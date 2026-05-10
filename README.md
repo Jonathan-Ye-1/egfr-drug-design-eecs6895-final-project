@@ -1,85 +1,218 @@
-# Target-Conditioned De Novo 3D Drug Design for EGFR Inhibitors
+# EGFR Inhibitor Design via Target-Conditioned 3D Molecular Generation
 
-**EECS 6895 Final Project** | Spring 2026
+**EECS 6895 Final Project** — Spring 2026
 
-An end-to-end AI-assisted drug discovery pipeline using the pretrained TargetDiff diffusion model
-to generate novel 3D molecules conditioned on EGFR binding pockets (wild-type 1M17 and T790M
-mutant 4I22), followed by multi-criteria evaluation and comparison with clinical drugs.
+This project builds a computational drug discovery pipeline for EGFR inhibitors. Starting from experimental crystal structures, the pipeline extracts binding pockets, generates novel 3D molecules using the TargetDiff diffusion model, scores them with AutoDock Vina, and applies multi-criteria drug-likeness filters to identify top candidates.
 
-## Pipeline Overview
+---
+
+## System Structure
 
 ```
-PDB Input (1M17 / 4I22)
-  → Pocket Extraction (10 Å)
-  → TargetDiff Conditional Generation (1000 mol/target)
-  → RDKit Validity Filter
-  → AutoDock Vina Scoring
-  → QED / SA / Lipinski Evaluation
-  → Multi-criteria Ranking → Top-10 Candidates
-  → PyMOL / py3Dmol Visualization
+.
+├── configs/
+│   ├── sampling.yaml        # TargetDiff sampling + evaluation thresholds
+│   └── targets.yaml         # PDB targets, pocket radii, baseline drug SMILES
+├── docs/
+│   └── slides_outline.md    # Presentation outline
+├── notebooks/
+│   ├── 01_setup_and_test.ipynb       # Environment verification and dependency check
+│   ├── 02_prepare_targets.ipynb      # PDB download, pocket extraction
+│   ├── 03_vina_baseline.ipynb        # AutoDock Vina baseline scoring
+│   ├── 04_generate_wildtype.ipynb    # TargetDiff generation on EGFR WT (1M17)
+│   ├── 05_filter_and_metrics.ipynb   # Validity, QED, SA, Lipinski filtering
+│   ├── 06_generate_mutant.ipynb      # TargetDiff generation on EGFR T790M (4I22)
+│   ├── 07_cross_docking.ipynb        # Cross-docking WT vs T790M candidates
+│   ├── 08_optimization_experiments.ipynb  # Optimization experiments A/B/C
+│   ├── 09_selectivity_analysis.ipynb      # Selectivity scoring and pharmacophore filter
+│   └── 10_sar_optimization.ipynb          # In silico SAR optimization
+├── src/
+│   ├── colab_init.py        # Google Colab setup helper (Drive mount, deps)
+│   ├── docking.py           # AutoDock Vina wrapper (single mol + batch)
+│   ├── evaluation.py        # QED, SA score, Lipinski metrics
+│   ├── filtering.py         # Drug-likeness + PAINS filters
+│   ├── pocket_extraction.py # Binding pocket extraction from PDB
+│   ├── utils.py             # Config loading, SDF I/O, result helpers
+│   └── visualization.py     # Vina distributions, UMAP, radar charts
+├── requirements.txt
+└── README.md
 ```
 
-## Targets
+### Data and Result Directories (generated at runtime)
 
-| Target | PDB ID | Description |
-|--------|--------|-------------|
-| EGFR Wild-Type | 1M17 | EGFR + Erlotinib co-crystal, 2.6 Å |
-| EGFR T790M | 4I22 | T790M resistance mutant |
+```
+data/
+├── pdb/           # Downloaded PDB files and receptor PDBQT
+├── pockets/       # Extracted binding pocket PDB files
+└── baselines/     # Baseline drug SDF conformers
+results/
+├── generated/     # Raw TargetDiff output SDF files
+├── vina_scores/   # Docking result CSVs
+└── figures/       # Publication-quality figures
+external/
+└── targetdiff/    # Cloned TargetDiff repository + checkpoint
+```
 
-## Quick Start
+---
+
+## Setup Instructions
+
+### Requirements
+
+- Python 3.10
+- Conda (recommended)
+- CUDA-capable GPU (for TargetDiff generation; CPU works but is slow)
+- Google Colab Pro is recommended for notebooks 04 and 06 (generation takes ~6–7 h each)
+
+### Step 1 — Clone the repository
 
 ```bash
-# 1. Clone this repo
-git clone https://github.com/<YOUR_USERNAME>/egfr_diffusion.git
-cd egfr_diffusion
+git clone https://github.com/Jonathan-Ye-1/egfr-drug-design-eecs6895-final-project.git
+cd egfr-drug-design-eecs6895-final-project
+```
 
-# 2. Create conda environment
+### Step 2 — Create a conda environment
+
+```bash
 conda create -n egfr python=3.10
 conda activate egfr
-
-# 3. Install dependencies
 pip install -r requirements.txt
-conda install -c conda-forge openbabel  # for PDBQT conversion
+conda install -c conda-forge openbabel   # required for PDBQT conversion
+```
 
-# 4. Clone TargetDiff
+### Step 3 — Clone TargetDiff
+
+```bash
+mkdir -p external
 git clone https://github.com/guanjq/targetdiff.git external/targetdiff
+```
 
-# 5. Download pretrained checkpoint (manual step)
-# From: https://drive.google.com/file/d/1_BUWcHMQLbvOPbU4aYiDYcvF_0VEPjPZ
-# Save to: external/targetdiff/checkpoints/pretrained_diffusion.pt
+### Step 4 — Download the pretrained checkpoint
 
-# 6. Start notebooks
+Download the TargetDiff pretrained model from the [official release](https://drive.google.com/file/d/1_BUWcHMQLbvOPbU4aYiDYcvF_0VEPjPZ) and save it to:
+
+```
+external/targetdiff/checkpoints/pretrained_diffusion.pt
+```
+
+### Step 5 — Launch notebooks
+
+```bash
 jupyter lab notebooks/
 ```
 
-## Notebook Guide
+Run notebooks in order (01 → 10). Each notebook mounts the previous notebook's outputs.
 
-| Notebook | Description |
-|----------|-------------|
-| 01_setup_and_test | Environment verification, TargetDiff clone & checkpoint download |
-| 02_prepare_targets | PDB download, pocket extraction, baseline drug conformer generation |
-| 03_vina_baseline | Receptor preparation, baseline drug Vina scoring |
-| 04_generate_wildtype | TargetDiff conditional generation on EGFR WT (1M17) |
-| 05_evaluate_wildtype | Validity / QED / SA Score / Vina evaluation for WT molecules |
-| 06_generate_mutant | TargetDiff conditional generation on EGFR T790M (4I22) |
-| 07_evaluate_mutant | T790M evaluation + cross-target UMAP chemical space analysis |
-| 08_final_analysis | Top-10 refinement, radar chart, all publication-quality figures |
+---
+
+## How to Run
+
+The pipeline is designed to run as a sequence of notebooks. Each notebook is self-contained and saves its outputs to `data/` or `results/` for the next stage.
+
+| Notebook | Input | Output |
+|----------|-------|--------|
+| 01 | — | Environment check, TargetDiff clone confirmed |
+| 02 | PDB IDs (1M17, 4I22) | Pocket PDB files, receptor PDBQT |
+| 03 | Receptor PDBQT, baseline SMILES | `results/vina_scores/baselines.csv` |
+| 04 | 1M17 pocket, TargetDiff checkpoint | `results/generated/wildtype_*.sdf` |
+| 05 | WT SDF files | `results/vina_scores/wt_metrics.csv` |
+| 06 | 4I22 pocket, TargetDiff checkpoint | `results/generated/mutant_*.sdf` |
+| 07 | WT + T790M SDF, both receptors | `results/vina_scores/cross_docking.csv` |
+| 08 | Cross-docking CSV | Optimization experiment results |
+| 09 | Generated + baseline molecules | Selectivity scores, pharmacophore-filtered candidates |
+| 10 | Selectivity CSV | SAR-optimized Top candidates |
+
+To run on **Google Colab**, replace the first cell of any notebook with:
+
+```python
+from src.colab_init import setup
+PROJECT_ROOT = setup("https://github.com/Jonathan-Ye-1/egfr-drug-design-eecs6895-final-project.git")
+```
+
+---
+
+## Example Usage
+
+### Extract a binding pocket
+
+```python
+from src.pocket_extraction import extract_pocket
+
+center = extract_pocket(
+    pdb_file="data/pdb/1M17.pdb",
+    ligand_resname="AQ4",
+    output_file="data/pockets/1M17_pocket.pdb",
+    radius=10.0,
+)
+print("Pocket center:", center)
+```
+
+### Dock a molecule
+
+```python
+from src.docking import VinaDocker
+
+docker = VinaDocker(
+    receptor_pdbqt="data/pdb/1M17_receptor.pdbqt",
+    center=(3.0, 14.5, 52.3),   # from pocket extraction
+    exhaustiveness=8,
+)
+from rdkit import Chem
+mol = Chem.MolFromSmiles("C#Cc1cccc(Nc2ncnc3cc(OCCOC)c(OCCOC)cc23)c1")
+score = docker.dock_mol(mol)
+print(f"Vina score: {score:.2f} kcal/mol")
+```
+
+### Evaluate drug-likeness
+
+```python
+from src.evaluation import evaluate_batch
+
+smiles_list = [
+    "C#Cc1cccc(Nc2ncnc3cc(OCCOC)c(OCCOC)cc23)c1",   # Erlotinib
+    "COc1cc2ncnc(Nc3ccc(F)c(Cl)c3)c2cc1OCCCN1CCOCC1",  # Gefitinib
+]
+df = evaluate_batch(smiles_list, output_csv="results/baseline_metrics.csv")
+```
+
+### Filter generated molecules
+
+```python
+from src.filtering import compute_all_metrics, apply_filters
+from rdkit import Chem
+
+mols = [Chem.MolFromSmiles(s) for s in smiles_list if s]
+df = compute_all_metrics(mols)
+df_filtered, summary = apply_filters(df)
+print(summary)
+```
+
+---
+
+## Targets
+
+| Target | PDB ID | Resolution | Co-crystal ligand |
+|--------|--------|------------|-------------------|
+| EGFR Wild-Type | 1M17 | 2.6 Å | Erlotinib (AQ4) |
+| EGFR T790M mutant | 4I22 | 2.8 Å | IRE |
 
 ## Evaluation Metrics
 
-| Metric | Tool | Target |
-|--------|------|--------|
+| Metric | Tool | Threshold |
+|--------|------|-----------|
 | Validity | RDKit | > 80% |
-| Uniqueness | RDKit SMILES | > 90% |
-| Diversity | Tanimoto distance | > 0.7 |
-| Vina Score | AutoDock Vina | ≤ −8 kcal/mol |
+| Uniqueness | Canonical SMILES | > 90% |
+| Diversity | Mean Tanimoto distance | > 0.7 |
+| Vina score | AutoDock Vina | ≤ −8 kcal/mol |
 | QED | RDKit | ≥ 0.5 |
 | SA Score | RDKit (Ertl 2009) | ≤ 4.0 |
-| Lipinski Ro5 | Custom | Pass all 4 |
+| Lipinski Ro5 | RDKit | Pass |
+
+---
 
 ## References
 
 1. Guan et al., *3D Equivariant Diffusion for Target-Aware Molecule Generation*, ICLR 2023.
-2. Trott & Olson, *AutoDock Vina*, J. Comput. Chem. 2010.
+2. Trott & Olson, *AutoDock Vina: Improving the speed and accuracy of docking*, J. Comput. Chem. 2010.
 3. Bickerton et al., *Quantifying the chemical beauty of drugs*, Nature Chemistry 2012.
 4. Ertl & Schuffenhauer, *Estimation of synthetic accessibility score*, J. Cheminformatics 2009.
